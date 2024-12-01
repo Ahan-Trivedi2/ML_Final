@@ -58,21 +58,24 @@ class DQNAgent:
         self.memory = deque(maxlen=max_replay_memory_size) # Replay memory buffer with a fixed max value for the deque
         self.batch_size = batch_size # Batch size for training (how many experiences to sample from the replay memory during training.)
         self.gamma = gamma # Discount factor for future rewards ???
-        self.exploration_max = exploration_max # Initial exploration rate
+        self.exploration_rate = exploration_max  # Initial exploration rate
         self.exploration_min = exploration_min # Minimum exploration rate
         self.exploration_decay = exploration_decay # Rate at which exploration decays
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")  # Use GPU if available
         self.local_net = DQNSolver(state_space, action_space).to(self.device) # Network used to estimate Q-values ????
         self.target_net = DQNSolver(state_space, action_space).to(self.device) # Target network for stable updates ????
         self.optimizer = torch.optim.Adam(self.local_net.parameters(), lr=lr)  # Adam optimizer for training  
-    def act(self, state):
-        """The act mechanism is the decision making mechanism of the agent. It uses an epsilon-greedy policy to balance exploration
-        (trying new actions) and exploitation (choosing the best-known action based on the current Q-values)"""
-        if random.random() < self.exploration_rate: # We start off with a very exploration rate, so at the begining this will be true a lot
-            torch.tensor([[random.randrange(self.action_space)]]).to(self.device) # Choose a random action out of the 5 possible choices there are
-        else:
-            with torch.no_grad(): # Turn off gradients 
-                return torch.argmax(self.local_net(state), dim=1, keepdim=True) # Find the Q-values for our current state, and choose action with the highest Q-value
+   def act(self, state):
+    """The act mechanism is the decision making mechanism of the agent. 
+    It uses an epsilon-greedy policy to balance exploration (trying new actions) 
+    and exploitation (choosing the best-known action based on the current Q-values)."""
+    # Random exploration based on the exploration rate
+    if random.random() < self.exploration_rate:  # With probability epsilon, explore
+        return torch.tensor([[random.randrange(self.action_space)]], dtype=torch.long).to(self.device)
+    # Exploitation based on Q-values from the network
+    with torch.no_grad():  # No gradient calculation for action selection
+        q_values = self.local_net(state)  # Get Q-values for the current state
+        return torch.argmax(q_values, dim=1, keepdim=True)  # Choose the action with the highest Q-value
     def remember(self, state, action, reward, next_state, terminal):
         """Store experiences in replay memory"""
         self.memory.append((state, action, reward, next_state, terminal)) # Append experience tuple to memory
@@ -116,7 +119,6 @@ def run():
     env = make_env()  # Initialize the environment using make_env function
     state_space = (4, 84, 84)  # Represents the input shape for the neural network (4, 84, 84)
     action_space = env.action_space.n  # Number of possible actions (e.g., 5 for RIGHT_ONLY)
-
     # Initialize agent with hyperparameters
     agent = DQNAgent(
         state_space=state_space,
@@ -129,37 +131,26 @@ def run():
         exploration_min=0.02,
         exploration_decay=0.99,
     )
-
     num_episodes = 1000  # Total number of episodes to train
     for episode in tqdm(range(num_episodes)):  # Loop through episodes with progress bar
-        reset_output = env.reset()  # Call reset method
-
-        # Dynamically check if reset_output is a tuple or not
-        if isinstance(reset_output, tuple):
-            obs = reset_output[0]  # New gym API
-        else:
-            obs = reset_output  # Older API (likely the case for your environment)
-
-        state = torch.tensor([obs]).to(agent.device)  # Convert the initial state to a PyTorch tensor
-
+        obs, info = env.reset()  # Unpack observation and info dictionary
+        state = torch.tensor([obs], dtype=torch.float32).to(agent.device)  # Convert the initial state to a PyTorch tensor
         total_reward = 0  # Initialize total reward for the episode
         while True:
+            env.render() # Render the environment to see the game screen
             action = agent.act(state)  # Choose an action
-            next_state, reward, terminal, info = env.step(action.item())  # Take the action in the environment
+            next_state, reward, terminal, truncated, info = env.step(action.item())  # Take the action in the environment
+            done = terminal or truncated  # Determine if the episode has ended
             total_reward += reward  # Accumulate the reward
-            next_state = torch.tensor([next_state]).to(agent.device)  # Convert the next state to a tensor
-            reward = torch.tensor([reward]).unsqueeze(0).to(agent.device)  # Reward as tensor
-            terminal = torch.tensor([terminal]).unsqueeze(0).to(agent.device)  # Terminal state as tensor
-
+            next_state = torch.tensor([next_state], dtype=torch.float32).to(agent.device)  # Convert the next state to a tensor
+            reward = torch.tensor([reward], dtype=torch.float32).unsqueeze(0).to(agent.device)  # Reward as tensor
+            done = torch.tensor([done], dtype=torch.float32).unsqueeze(0).to(agent.device)  # Done state as tensor
             # Store the experience and train the agent
-            agent.remember(state, action, reward, next_state, terminal)
+            agent.remember(state, action, reward, next_state, done)
             agent.experience_replay()
-
             state = next_state  # Update the current state
-
-            if terminal:  # Break the loop if the episode ends
+            if done:  # Break the loop if the episode ends
                 break
-
         print(f"Episode {episode + 1}, Total Reward: {total_reward}")  # Print episode results
         if episode % 10 == 0:  # Every ten episodes, update the target network
             agent.copy_model()
@@ -168,10 +159,3 @@ def run():
 # Run the training loop if this file is executed
 if __name__ == "__main__":
     run()
-
-
-
-
-    
-        
-
