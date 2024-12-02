@@ -65,17 +65,17 @@ class DQNAgent:
         self.local_net = DQNSolver(state_space, action_space).to(self.device) # Network used to estimate Q-values ????
         self.target_net = DQNSolver(state_space, action_space).to(self.device) # Target network for stable updates ????
         self.optimizer = torch.optim.Adam(self.local_net.parameters(), lr=lr)  # Adam optimizer for training  
-   def act(self, state):
-    """The act mechanism is the decision making mechanism of the agent. 
-    It uses an epsilon-greedy policy to balance exploration (trying new actions) 
-    and exploitation (choosing the best-known action based on the current Q-values)."""
-    # Random exploration based on the exploration rate
-    if random.random() < self.exploration_rate:  # With probability epsilon, explore
-        return torch.tensor([[random.randrange(self.action_space)]], dtype=torch.long).to(self.device)
-    # Exploitation based on Q-values from the network
-    with torch.no_grad():  # No gradient calculation for action selection
-        q_values = self.local_net(state)  # Get Q-values for the current state
-        return torch.argmax(q_values, dim=1, keepdim=True)  # Choose the action with the highest Q-value
+    def act(self, state):
+        """The act mechanism is the decision making mechanism of the agent. 
+        It uses an epsilon-greedy policy to balance exploration (trying new actions) 
+        and exploitation (choosing the best-known action based on the current Q-values)."""
+        # Random exploration based on the exploration rate
+        if random.random() < self.exploration_rate:  # With probability epsilon, explore
+            return torch.tensor([[random.randrange(self.action_space)]], dtype=torch.long).to(self.device)
+        # Exploitation based on Q-values from the network
+        with torch.no_grad():  # No gradient calculation for action selection
+            q_values = self.local_net(state)  # Get Q-values for the current state
+            return torch.argmax(q_values, dim=1, keepdim=True)  # Choose the action with the highest Q-value
     def remember(self, state, action, reward, next_state, terminal):
         """Store experiences in replay memory"""
         self.memory.append((state, action, reward, next_state, terminal)) # Append experience tuple to memory
@@ -91,8 +91,9 @@ class DQNAgent:
         rewards = torch.cat(rewards).to(self.device)
         next_states = torch.cat(next_states).to(self.device)
         terminals = torch.cat(terminals).to(self.device)
-        # ??? This stuff is confusing
-        target_q_values = rewards + self.gamma * self.target_net(next_states).max(1)[0].detach().unsqueeze(1) * (1 - terminals) # Calculate target Q-values
+        # Double DQN: Use local_net to select actions, target_net to evaluate
+        next_actions = self.local_net(next_states).argmax(dim=1, keepdim=True) # Select the best action for each next_state
+        target_q_values = rewards + self.gamma * self.target_net(next_states).gather(1, next_actions) * (1 - terminals) # calculates the target Q-value for each state-action pair in the batch using the target network (target_net)
         current_q_values = self.local_net(states).gather(1, actions) # Uses the batch of random states to compute Q-values for the actions that were taken in these states
         loss = nn.SmoothL1Loss()(current_q_values, target_q_values) # Calculate the Huber Loss ???
         # Backpropagate and update the model (local_net)
@@ -133,13 +134,13 @@ def run():
     )
     num_episodes = 1000  # Total number of episodes to train
     for episode in tqdm(range(num_episodes)):  # Loop through episodes with progress bar
-        obs, info = env.reset()  # Unpack observation and info dictionary
+        obs = env.reset()  # Unpack observation and dictionary
         state = torch.tensor([obs], dtype=torch.float32).to(agent.device)  # Convert the initial state to a PyTorch tensor
         total_reward = 0  # Initialize total reward for the episode
         while True:
             env.render() # Render the environment to see the game screen
             action = agent.act(state)  # Choose an action
-            next_state, reward, terminal, truncated, info = env.step(action.item())  # Take the action in the environment
+            next_state, reward, terminal, truncated = env.step(action.item())  # Take the action in the environment
             done = terminal or truncated  # Determine if the episode has ended
             total_reward += reward  # Accumulate the reward
             next_state = torch.tensor([next_state], dtype=torch.float32).to(agent.device)  # Convert the next state to a tensor
