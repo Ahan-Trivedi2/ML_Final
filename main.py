@@ -1,15 +1,29 @@
 # Import Necessary Libraries
 from collections import deque # For efficient storage of replay memory (double ended queue)
 import random  # For sampling random actions and experiences
-import torch  # PyTorch for building and training neural networks
+import torch  # PyTorch for buildi  ng and training neural networks
 import torch.nn as nn  # For using PyTorch neural network components
 import numpy as np  # For using numerical operations
 from gymnasium import make # Make is a function provided by gym-super-mario-bros to create an instance of the Mario environment
 from tqdm import tqdm # Used to show the progress of training across multiple episodes
-from gymnasium.wrappers import FrameStack, GrayScaleObservation, ResizeObservation # Wrapper for preproccessing 
+from gymnasium.wrappers import FrameStackObservation, GrayscaleObservation, ResizeObservation # Wrapper for preproccessing 	
+
+from gymnasium.envs.registration import registry
+
+from ale_py import ALEInterface
+
+ale = ALEInterface()
+try:
+    ale.loadROM("./roms/mario_bros.bin")
+    print("ROM loaded successfully!")
+except Exception as e:
+    print("Error loading ROM:", e)
+
+
+
 
 # Define the reduced action space for Mario
-ACTION_SPACE = [0, 1, 2, 3, 4]  # Actions: NOOP, UP, RIGHT, LEFT, DOWN
+ACTION_SPACE = [0, 3, 6, 9, 12, 15]  # Actions: NOOP, UP, RIGHT, LEFT, DOWN
 
 # Define a Deep Q-Network (DQN) class for estimating Q-values
 class DQNSolver(nn.Module):
@@ -99,13 +113,15 @@ class DQNAgent:
         """Copy the weights of the local model to the target model"""
         # Synchronize the weights
         self.target_net.load_state_dict(self.local_net.state_dict()) # Loads in the local_net state_dicts (learnable paramters) into the target net to synchronize the models
+        
+
 
 # Define a function to preprocess the environment
 def make_env():
-    env = make('ALE/MarioBros-v5', frameskip=4, repeat_action_probability=0.25) # Create the mario environment
-    env = GrayScaleObservation(env) # Convert frames to grayscale (with 1 dimension rather than 3)
+    env = make('ALE/MarioBros-v5', frameskip=4, repeat_action_probability=0.25) # Create the atari mario environment
+    env = GrayscaleObservation(env) # Convert frames to grayscale (with 1 dimension rather than 3)
     env = ResizeObservation(env, (84,84)) # Resize frames to 84x84
-    env = FrameStack(env, num_stack=4) # Stack the last four frames
+    env = FrameStackObservation(env, stack_size=4) # Stack the last four frames
     return env
 
 # Main training loop
@@ -128,14 +144,16 @@ def run():
     num_episodes = 1000  # Total number of episodes to train
     for episode in tqdm(range(num_episodes)):  # Loop through episodes with progress bar
         obs,_ = env.reset()  # Unpack observation and dictionary
-        state = torch.tensor([obs], dtype=torch.float32).to(agent.device)  # Convert the initial state to a PyTorch tensor
+        state = torch.tensor(np.array([obs]), dtype=torch.float32).to(agent.device)
+        # state = torch.tensor([obs], dtype=torch.float32).to(agent.device)  # Convert the initial state to a PyTorch tensor
         total_reward = 0  # Initialize total reward for the episode
         while True:
             action = agent.act(state)  # Choose an action
             next_obs, reward, terminal, truncated, _ = env.step(action.item())  # Take the action in the environment
             done = terminal or truncated  # Determine if the episode has ended
             total_reward += reward  # Accumulate the reward
-            next_state = torch.tensor([next_obs], dtype=torch.float32).to(agent.device)  # Convert the next state to a tensor
+            next_state = torch.tensor(np.array([next_obs]), dtype=torch.float32).to(agent.device)
+            # next_state = torch.tensor([next_obs], dtype=torch.float32).to(agent.device)  # Convert the next state to a tensor
             reward = torch.tensor([reward], dtype=torch.float32).unsqueeze(0).to(agent.device)  # Reward as tensor
             done = torch.tensor([done], dtype=torch.float32).unsqueeze(0).to(agent.device)  # Done state as tensor
             # Store the experience and train the agent
@@ -147,6 +165,9 @@ def run():
         print(f"Episode {episode + 1}, Total Reward: {total_reward}")  # Print episode results
         if episode % 10 == 0:  # Every ten episodes, update the target network
             agent.copy_model()
+        if not episode % 100:
+            print("Saving Model")
+            torch.save(agent.local_net.state_dict(), "dqn_mario.pth")
     env.close()  # Close the environment when training is done
 
 # Run the training loop if this file is executed
