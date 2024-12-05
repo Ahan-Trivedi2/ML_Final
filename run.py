@@ -31,7 +31,7 @@ def load_model(filepath, input_shape, n_actions):
     return model
 
 # Define a function to evaluate the trained model with rendering
-def evaluate_model_with_rendering(env, model, action_space, num_episodes=5, delay=0.05):
+def evaluate_model_with_rendering(env, model, action_space, num_episodes=5, delay=0.0005):
     for episode in range(num_episodes):
         print(f"Starting Episode {episode + 1}")
         obs, _ = env.reset()
@@ -66,24 +66,27 @@ def evaluate_model_with_rendering(env, model, action_space, num_episodes=5, dela
 
         print(f"Episode {episode + 1}: Total Reward = {total_reward}")
 
-# Load your environment
-env = make_env()
 
-# Define the input shape and number of actions based on your training configuration
-state_space = (4, 84, 84)
-action_space = ACTION_SPACE
+def run(path):
+    # Load your environment
+    env = make_env()
 
-# Load the model
-trained_model = load_model("dqn_mario.pth", state_space, len(action_space))
+    # Define the input shape and number of actions based on your training configuration
+    state_space = (4, 84, 84)
+    action_space = ACTION_SPACE
 
-# Evaluate the model with rendering
-evaluate_model_with_rendering(env, trained_model, action_space)
+    # Load the model
+    trained_model = load_model("dqn_mario_final.pth", state_space, len(action_space))
 
-# Close the environment
-env.close()
+    # Evaluate the model with rendering
+    evaluate_model_with_rendering(env, trained_model, action_space)
+
+    # Close the environment
+    env.close()
 
 
-
+if __name__ == "__main__":
+    run("dqn_mario.pth")
 
 """
 # Load the trained weights into a DQNSolver model

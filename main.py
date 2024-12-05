@@ -135,13 +135,13 @@ def run():
         action_space=action_space,
         max_replay_memory_size=30000,
         batch_size=32,
-        gamma=0.99,
+        gamma=0.999,
         lr=0.00025,
-        exploration_max=1.0,
+        exploration_max=.08,
         exploration_min=0.02,
-        exploration_decay=0.99,
+        exploration_decay=0.995,
     )
-    num_episodes = 1000  # Total number of episodes to train
+    num_episodes = 10000  # Total number of episodes to train
     for episode in tqdm(range(num_episodes)):  # Loop through episodes with progress bar
         obs,_ = env.reset()  # Unpack observation and dictionary
         state = torch.tensor(np.array([obs]), dtype=torch.float32).to(agent.device)
@@ -151,6 +151,10 @@ def run():
             action = agent.act(state)  # Choose an action
             next_obs, reward, terminal, truncated, _ = env.step(action.item())  # Take the action in the environment
             done = terminal or truncated  # Determine if the episode has ended
+            if reward > 0:
+                reward += 1  # Encourage progress
+            else:
+                reward -= 0.01  # Penalize idleness or negative reward events
             total_reward += reward  # Accumulate the reward
             next_state = torch.tensor(np.array([next_obs]), dtype=torch.float32).to(agent.device)
             # next_state = torch.tensor([next_obs], dtype=torch.float32).to(agent.device)  # Convert the next state to a tensor
@@ -167,7 +171,10 @@ def run():
             agent.copy_model()
         if not episode % 100:
             print("Saving Model")
-            torch.save(agent.local_net.state_dict(), "dqn_mario.pth")
+            torch.save(agent.local_net.state_dict(), f"dqn_mario_{episode}.pth")
+            # if not episode % 200 and episode > 0:
+            #     from run import run
+            #     run(f"dqn_mario_{episode}.pth")
     env.close()  # Close the environment when training is done
 
 # Run the training loop if this file is executed
