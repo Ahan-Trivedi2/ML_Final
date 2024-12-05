@@ -8,15 +8,13 @@ from gymnasium import make # Make is a function provided by gym-super-mario-bros
 # Action mapping for readability (adjust to your ACTION_SPACE)
 ACTION_MAP = {
     0: "NOOP",
-    3: "UP",
-    6: "RIGHT",
-    9: "LEFT",
-    12: "DOWN",
-    15: "A"
+    1: "FIRE",
+    2: "RIGHT",
+    3: "LEFT",
 }
 
 def make_env():
-    env = make('ALE/MarioBros-v5', frameskip=4, repeat_action_probability=0.25, render_mode="human")  # Specify render_mode
+    env = make('ALE/Breakout-v5', frameskip=4, repeat_action_probability=0.25, render_mode="human")  # Specify render_mode
     env = GrayscaleObservation(env)  # Convert frames to grayscale
     env = ResizeObservation(env, (84, 84))  # Resize frames to 84x84
     env = FrameStackObservation(env, stack_size=4)  # Stack the last four frames
@@ -37,6 +35,8 @@ def evaluate_model_with_rendering(env, model, action_space, num_episodes=5, dela
         obs, _ = env.reset()
         state = torch.tensor(np.array([obs]), dtype=torch.float32)
         total_reward = 0
+        env.step(1)
+
         while True:
             # Render the environment
             env.render()
@@ -45,6 +45,7 @@ def evaluate_model_with_rendering(env, model, action_space, num_episodes=5, dela
             with torch.no_grad():
                 q_values = model(state)
                 action_idx = torch.argmax(q_values).item()  # Choose the action with the highest Q-value
+                print(action_idx)
             action = action_space[action_idx]
 
             # Take the action in the environment
@@ -76,7 +77,7 @@ def run(path):
     action_space = ACTION_SPACE
 
     # Load the model
-    trained_model = load_model("dqn_mario_final.pth", state_space, len(action_space))
+    trained_model = load_model(path, state_space, len(action_space))
 
     # Evaluate the model with rendering
     evaluate_model_with_rendering(env, trained_model, action_space)
@@ -86,7 +87,7 @@ def run(path):
 
 
 if __name__ == "__main__":
-    run("dqn_mario.pth")
+    run("models/dqn_breakout_9500.pth")
 
 """
 # Load the trained weights into a DQNSolver model

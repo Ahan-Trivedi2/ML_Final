@@ -20,10 +20,8 @@ except Exception as e:
     print("Error loading ROM:", e)
 
 
-
-
 # Define the reduced action space for Mario
-ACTION_SPACE = [0, 3, 6, 9, 12, 15]  # Actions: NOOP, UP, RIGHT, LEFT, DOWN
+ACTION_SPACE = [0, 2, 3]  # Actions: NOOP, UP, RIGHT, LEFT, DOWN
 
 # Define a Deep Q-Network (DQN) class for estimating Q-values
 class DQNSolver(nn.Module):
@@ -79,6 +77,7 @@ class DQNAgent:
         and exploitation (choosing the best-known action based on the current Q-values)."""
         # Random exploration based on the exploration rate
         if random.random() < self.exploration_rate:  # With probability epsilon, explore
+            # print(f"random: {torch.tensor([[random.randrange(self.action_space)]], dtype=torch.long).to(self.device)}")
             return torch.tensor([[random.randrange(self.action_space)]], dtype=torch.long).to(self.device)
         # Exploitation based on Q-values from the network
         with torch.no_grad():  # No gradient calculation for action selection
@@ -115,10 +114,9 @@ class DQNAgent:
         self.target_net.load_state_dict(self.local_net.state_dict()) # Loads in the local_net state_dicts (learnable paramters) into the target net to synchronize the models
         
 
-
 # Define a function to preprocess the environment
 def make_env():
-    env = make('ALE/MarioBros-v5', frameskip=4, repeat_action_probability=0.25) # Create the atari mario environment
+    env = make('ALE/Breakout-v5', frameskip=4, repeat_action_probability=0.25) # Create the atari mario environment
     env = GrayscaleObservation(env) # Convert frames to grayscale (with 1 dimension rather than 3)
     env = ResizeObservation(env, (84,84)) # Resize frames to 84x84
     env = FrameStackObservation(env, stack_size=4) # Stack the last four frames
@@ -147,14 +145,14 @@ def run():
         state = torch.tensor(np.array([obs]), dtype=torch.float32).to(agent.device)
         # state = torch.tensor([obs], dtype=torch.float32).to(agent.device)  # Convert the initial state to a PyTorch tensor
         total_reward = 0  # Initialize total reward for the episode
+        env.step(1)
+        #torch.tensor([[random.randrange(self.action_space)]], dtype=torch.long).to(self.device)
+
         while True:
             action = agent.act(state)  # Choose an action
+            # print(action.item())
             next_obs, reward, terminal, truncated, _ = env.step(action.item())  # Take the action in the environment
             done = terminal or truncated  # Determine if the episode has ended
-            if reward > 0:
-                reward += 1  # Encourage progress
-            else:
-                reward -= 0.01  # Penalize idleness or negative reward events
             total_reward += reward  # Accumulate the reward
             next_state = torch.tensor(np.array([next_obs]), dtype=torch.float32).to(agent.device)
             # next_state = torch.tensor([next_obs], dtype=torch.float32).to(agent.device)  # Convert the next state to a tensor
@@ -169,9 +167,12 @@ def run():
         print(f"Episode {episode + 1}, Total Reward: {total_reward}")  # Print episode results
         if episode % 10 == 0:  # Every ten episodes, update the target network
             agent.copy_model()
-        if not episode % 100:
+            # from run import run
+            # torch.save(agent.local_net.state_dict(), f"a.pth")
+            # run("a.pth")
+        if not episode % 500:
             print("Saving Model")
-            torch.save(agent.local_net.state_dict(), f"dqn_mario_{episode}.pth")
+            torch.save(agent.local_net.state_dict(), f"models/dqn_breakout_{episode}.pth")
             # if not episode % 200 and episode > 0:
             #     from run import run
             #     run(f"dqn_mario_{episode}.pth")
